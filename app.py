@@ -12,32 +12,49 @@ app = Flask(__name__)
 DATABASE_URL = os.getenv("SUPABASE_DB_URL")
 
 def get_db_connection():
-    return psycopg2.connect(DATABASE_URL)
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        return conn
+    except Exception as e:
+        print("❌ Database connection error:", e)
+        return None
 
-# API Endpoint: Fetch Career Recommendations Based on User Interests
+# ✅ Test Route to Confirm Flask is Running
+@app.route('/')
+def home():
+    return "✅ Flask API is Running!"
+
+# ✅ Career Recommendation Route
 @app.route('/get_career_recommendations', methods=['GET'])
 def get_career_recommendations():
-    user_interest = request.args.get('interest')  # Get interest from query params
+    user_interest = request.args.get('interest')  # Get interest from URL params
 
     if not user_interest:
         return jsonify({"error": "Interest parameter is required"}), 400
 
     conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+
     cur = conn.cursor()
 
     # Query job market data based on interest
-    cur.execute("""
+    query = """
         SELECT industry, top_majors, average_salary, job_growth_percentage
         FROM job_market
         WHERE industry ILIKE %s OR top_majors ILIKE %s
-    """, (f"%{user_interest}%", f"%{user_interest}%"))
-
+    """
+    cur.execute(query, (f"%{user_interest}%", f"%{user_interest}%"))
+    
     results = cur.fetchall()
     cur.close()
     conn.close()
 
     if results:
-        careers = [{"industry": row[0], "top_majors": row[1], "average_salary": row[2], "growth": row[3]} for row in results]
+        careers = [
+            {"industry": row[0], "top_majors": row[1], "average_salary": row[2], "growth": row[3]}
+            for row in results
+        ]
         return jsonify({"careers": careers})
     else:
         return jsonify({"message": "No relevant careers found. Try another interest."})
