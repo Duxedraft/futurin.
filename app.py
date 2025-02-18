@@ -51,13 +51,18 @@ def get_career_recommendations():
     conn.close()
 
     if results:
-        careers = [
-            {"industry": row[0], "top_majors": row[1], "average_salary": row[2], "growth": row[3]}
-            for row in results
-        ]
-        return jsonify({"careers": careers})
+        formatted_careers = []
+        for row in results:
+            career_message = (
+            f"💼 **{row[0]}** is a great field to explore! \n"
+            f"📚 **Recommended Majors:** {row[1]}\n"
+            f"💰 **Average Salary:** ${row[2]:,} per year\n"
+            f"📈 **Job Growth:** {row[3]}% projected increase\n"
+        )
+        formatted_careers.append(career_message)
+        return jsonify({"fulfillmentText": "\n\n".join(formatted_careers)})
     else:
-        return jsonify({"message": "No relevant careers found. Try another interest."})
+        return jsonify({"fulfillmentText": "I'm sorry, I couldn't find a matching career. Try another interest!"})
 
 if __name__ == '__main__':
     app.run(debug=True)
