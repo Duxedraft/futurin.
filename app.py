@@ -5,64 +5,47 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
 app = Flask(__name__)
 
-# Supabase Database Connection
 DATABASE_URL = os.getenv("SUPABASE_DB_URL")
 
 def get_db_connection():
-    try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-        return conn
-    except Exception as e:
-        print("❌ Database connection error:", e)
-        return None
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-# ✅ Test Route to Confirm Flask is Running
-@app.route('/')
-def home():
-    return "✅ Flask API is Running!"
-
-# ✅ Career Recommendation Route
-@app.route('/get_career_recommendations', methods=['GET'])
-def get_career_recommendations():
-    user_interest = request.args.get('interest')  # Get interest from URL params
-
-    if not user_interest:
-        return jsonify({"error": "Interest parameter is required"}), 400
-
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
-
-    cur = conn.cursor()
-
-    # Query job market data based on interest
-    query = """
-        SELECT industry, top_majors, average_salary, job_growth_percentage
-        FROM job_market
-        WHERE industry ILIKE %s OR top_majors ILIKE %s
-    """
-    cur.execute(query, (f"%{user_interest}%", f"%{user_interest}%"))
+@app.route('/career_assessment', methods=['POST'])
+def career_assessment():
+    data = request.json
+    user_id = data.get("user_id")
     
-    results = cur.fetchall()
+    # Sample scoring logic
+    interest_area = data.get("interest_area")  # Example: "Technology and computing"
+    skills = data.get("skills", [])
+    values = data.get("career_values", [])
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Query careers matching interest area
+    cur.execute("SELECT major, interest_alignment, skill_match, value_alignment FROM career_scoring WHERE major ILIKE %s", 
+                (f"%{interest_area}%",))
+    
+    career_matches = cur.fetchall()
+    recommendations = []
+    
+    for career in career_matches:
+        major, interest_score, skill_score, value_score = career
+        total_score = interest_score + skill_score + value_score
+        
+        if total_score >= 70:  # Adjust threshold if needed
+            recommendations.append({
+                "major": major,
+                "score": total_score
+            })
+    
     cur.close()
     conn.close()
-
-    if results:
-        formatted_careers = []
-        for row in results:
-            career_message = (
-            f"💼 **{row[0]}** is a great field to explore! \n"
-            f"📚 **Recommended Majors:** {row[1]}\n"
-            f"💰 **Average Salary:** ${row[2]:,} per year\n"
-            f"📈 **Job Growth:** {row[3]}% projected increase\n"
-        )
-        formatted_careers.append(career_message)
-        return jsonify({"fulfillmentText": "\n\n".join(formatted_careers)})
-    else:
-        return jsonify({"fulfillmentText": "I'm sorry, I couldn't find a matching career. Try another interest!"})
+    
+    return jsonify({"recommended_careers": sorted(recommendations, key=lambda x: x["score"], reverse=True)[:3]})
 
 if __name__ == '__main__':
     app.run(debug=True)
